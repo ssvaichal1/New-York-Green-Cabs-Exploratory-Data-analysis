@@ -1,0 +1,409 @@
+---
+title: "NYC Green Taxi Sept 2015: Analysis"
+author: "C949621"
+date: "January 8, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Green Taxis
+
+Green Taxis or as they are popularly known, **Boro taxis** (or Boro cabs) are cabs in New York city that pick up passengers from outer boroughs. There are 5 boroughs in New York City, namely, Manhattan, Brooklyn, Staten Island, Queens and Bronx. Green cabs can only pick up passengers from above East 69th and West 110th Streets in Manhattan and from other boroughs.
+
+
+Following code programmatically downloads the data and will give number of rows, columns as the output
+
+**Question 1**
+
+```{r, echo = TRUE}
+###########################################################################################
+#Question 1
+###########################################################################################
+
+##if RCurl is not already installed, install using instal.packages('RCurl')
+
+library(RCurl)
+url <- "https://s3.amazonaws.com/nyc-tlc/trip+data/green_tripdata_2015-09.csv"
+data <- read.csv(file = url)
+dim(data)
+
+#data will take some time to load. DO NOT terminate the code
+
+names(data)
+str(data)
+#Number of Rows: 1494926
+#Number of Columns: 21
+head(data)
+
+```
+
+**Question 2**
+
+Histogram of the number of trip distance:
+```{r question2}
+###########################################################################################
+#Question 2
+###########################################################################################
+
+data1<- subset(data, select = -c(Ehail_fee))
+data1<- na.omit(data1)
+any(is.na(data1))
+#data1 does not have any NA values now
+str(data1)
+library(ggplot2)
+
+qplot(data1$Trip_distance, geom="histogram", bins = 100, xlab = "Trip_Dist", ylab = "Count", 
+      binwidth = 0.1, fill = I("deepskyblue3"))
+
+#when we plot the histogram without adjusting the xlimits, we can see that the trip distnce is concentrated around 0.
+
+```
+
+As we can see, the trip distances are concentrated around zero. Does that imply New Yorkers use green taxis mainly for shorter trips? We will have a detailed look at the data in the following histogram.
+
+
+```{r}
+#By Further rifining the plot, we get:
+
+ggplot(data1, aes(x= Trip_distance))+geom_histogram(binwidth = 0.3, aes(fill = ..count..))+
+  coord_cartesian(xlim=c(0,20))+
+  ggtitle("Trip distance Hist") + xlab("Trip_Distance")+ylab("Frequency")
+
+#we can use qplot() instead of ggplot()
+
+```
+
+From the above plot, we can infer that maximum number of trips have a Trip_distance between 0 to 5 miles. 
+
+Now, we are going to analyse trip distance grouped by hour of the day. To do the same, please install "lubridate" package using the install.packages() command. 
+
+**Question 3**
+
+```{r lubridate}
+###########################################################################################
+#Question 3
+###########################################################################################
+
+library(lubridate)
+
+
+
+data1$lpep_pickup_datetime <- ymd_hms(data1$lpep_pickup_datetime, tz = "US/Eastern")
+data1$Lpep_dropoff_datetime <- ymd_hms(data1$Lpep_dropoff_datetime, tz = "US/Eastern")
+#Time Zone = US? Eastern
+#During september, there is no daylight saving adjustment done
+
+##Creating an interval variable in order to ultimately calculate duration
+data1$time.interval <- data1$lpep_pickup_datetime%--%data1$Lpep_dropoff_datetime
+head(data1$time.interval)
+
+data1$time.duration <- as.duration(data1$time.interval)
+summary(data1$time.duration)
+#time duration is in seconds
+```
+
+Let us use this analysis-ready time data: 
+
+```{r}
+
+
+data1$DepTime <- hour(data1$lpep_pickup_datetime)
+
+
+library(dplyr)
+data2<- group_by(data1, DepTime)
+dist_by_hour <- as.data.frame(summarize(data2, MeanDist = mean(Trip_distance), 
+                                        MedianDist = median(Trip_distance) ))
+par(mfrow = c(1,2))
+plot(dist_by_hour$DepTime, dist_by_hour$MedianDist, type = 'o', col = 'blue',
+     main = "Median Distance Travelled", xlab = "Hour", ylab = 'Median Distance(miles)', 
+     ylim = c(1,4.5))
+plot(dist_by_hour$DepTime, dist_by_hour$MeanDist, type = 'o', col = 'red', 
+     main = "Mean Distance Travelled", xlab = "Hour", ylab = 'Mean Distance(miles)', 
+     ylim = c(1,4.5))
+
+```
+
+Mean and the median trip distances peak around 5 am and are high in general after 8 pm. During the day, however, the mean/median distances travelled drops. It can be hypothized that New Yorkers take more green cabs during the mornings. Alternately, it is also possible that green cabs are used to travel longer distances in mornings(cab to work, airport pickups/ drops)
+
+Trips terminating at the NYC JFK airport can be analyzed based on RateCodeID = 2 in the dataset. Airport specific analysis can also be done using polygon coordinates pertaining particular airport(s)  as will be seen subsequently for question 5. But presently, we will base our analysis on JFK trips. 
+
+```{r}
+
+dat2 <- subset(data1, RateCodeID == 2)
+dat_2 <- group_by(dat2, DepTime)
+dim(dat_2)
+mean(dat2$Fare_amount)
+median(dat2$Fare_amount)
+
+fare_by_hour_jfk <- as.data.frame(summarize(dat_2, Avg_fare = mean(Fare_amount), Median_fare = median(Fare_amount)))
+
+
+
+plot(fare_by_hour_jfk$DepTime, fare_by_hour_jfk$Avg_fare, type = 'o', col = 'red',
+     main = "Average Fare per hour", xlab = "Hour", ylab = 'Average Fare($)'
+     )
+
+
+```
+
+Mean fare is highest at 5 am and lowest around 1 am. However, the plot of median fare is interesting:
+
+```{r}
+plot(fare_by_hour_jfk$DepTime, fare_by_hour_jfk$Median_fare, type = 'o', col = 'blue',
+     main = "Median Fare per hour", xlab = "Hour", ylab = 'Median Fare($)'
+     )
+
+```
+
+As seen, interestingly the median fare is constant. Refer output of the following code:
+```{r}
+fare_by_hour_jfk
+```
+
+Before we move on to building models and predictions for Tip_percentage, we will be cleaning the data. On clean data, Random Forest is used to extract important variables. Subsequently, a multiple linear regression model is built.
+
+
+**Question 4**
+
+```{r data_preprocessing}
+
+###########################################################################################
+#Question 4
+###########################################################################################
+
+#We have already remved NA entries in the previous questions.
+#We will consider trips which have time duration more than 10 seconds
+data_2 <- subset(data1, data1$Trip_distance!=0 & data1$time.duration > as.duration(10))
+
+
+data3 <- subset(data_2, Tip_amount >= 0 & Fare_amount > 0)
+dim(data3)
+
+data3$Tip_perc <- (data3$Tip_amount/data3$Fare_amount)*100
+boxplot(data3$Tip_perc, xlab ="Tip (%) with outliers", horizontal = TRUE, border = 'red', col = 'blue')
+#Tip percentage goes up to 10000%!
+
+#creating a copy that contains outliers
+data4<- data3
+
+#removing outliers
+data4 <- data4[data4$Tip_perc > quantile(data4$Tip_perc, .25) - 1.5*IQR(data4$Tip_perc) & 
+                 data4$Tip_perc < quantile(data4$Tip_perc, .75) + 1.5*IQR(data4$Tip_perc), ]
+#4836 records were lost by removing outliers
+
+dim(data4)
+boxplot(data4$Tip_perc, xlab ="Tip (%) without outliers", horizontal = TRUE, col = 'red', border = 'blue'
+        )
+
+#Next, we remove variables for analysis
+#VendorID and Store_fwd_flag do not affect Tip_amount
+mean(subset(data1, VendorID == 1)$Tip_amount)
+mean(subset(data1, VendorID == 2)$Tip_amount)
+
+
+
+dataq4 <- subset(data4, select = -c(VendorID,Store_and_fwd_flag, MTA_tax, Tip_amount, 
+                                    improvement_surcharge, time.interval))
+
+#let us correct classes of variables before building a model
+
+dataq4$Trip_type<- as.factor(dataq4$Trip_type)
+dataq4$RateCodeID <- as.factor(dataq4$RateCodeID)
+dataq4$Payment_type <- as.factor(dataq4$Payment_type)
+str(dataq4)
+
+
+library(randomForest)
+#There are 17 variables, so setting mtry =5
+rf.taxi <- randomForest(Tip_perc ~., 
+                        data = dataq4[sample(1461113, 14611), ], mtry = 5, importance = TRUE)
+importance(rf.taxi)
+varImpPlot(rf.taxi, col = 'red', main = "Random Forest: Importance of Variables")
+
+```
+
+We built the random forest model on a subset of the original data because of limited computing power. If computing power is not a constraint, predictions can be made using random forest itself. Even though we cannot directly use this model for predictions owing to a possible bias due to limited number of data points, we will use the importance data to build a multiple linear regression model.
+
+```{r multipleregression}
+dataq4$time.duration <- as.numeric(dataq4$time.duration)
+
+mr <- lm(Tip_perc ~ .-Passenger_count , data = dataq4)
+#there is singularity in the data. ::Removing dropoff and pick up times from the data to remove coolinearilty with DepTime
+
+mr_1 <- lm(Tip_perc ~ .-Passenger_count -Lpep_dropoff_datetime -lpep_pickup_datetime , dataq4)
+
+summary(mr_1)
+
+
+
+
+# library(boot)
+# mr_1 <- glm(Tip_perc ~ .-Passenger_count -Lpep_dropoff_datetime -lpep_pickup_datetime , data = subset(dataq4, 
+#                       RateCodeID!=6))
+# #This model does not work with RateIDCode = 6. There were 36 datapoints in the original dataset and there are only 18 such points in the present dataset
+# cv.error <- cv.glm(subset(dataq4, RateCodeID !=6), mr_1, K=11)
+# cv.error$delta
+
+
+```
+Residual standard error is 5.423. p-values are less than 0.05 and mod(t-values) are greater than 2. It is expected that the multiple linear regression model (mr_1) will predict accurately.
+
+Let us look at the residual plot, qq plot of the model
+
+```{r}
+par(mfrow=(c(2,2)))
+plot(mr_1)
+```
+
+From above, we can infer the model is imperfect. Outliers and leverage points in the data still need to be dealt with. Let us also check collinearity using vif() from library(car)
+
+```{r}
+library(car)
+vif(mr_1)
+
+```
+
+Removing collinear terms:
+```{r collinearitylast}
+mr_2 <- update(mr_1, ~.-Fare_amount -Dropoff_longitude -Dropoff_latitude -RateCodeID -Trip_type
+               -Pickup_longitude -Pickup_latitude)
+summary(mr_2)
+library(car)
+vif(mr_2)
+
+#colinerilty has been taken care of. VIF values < 10.
+
+#Deleting a few outliers
+dataq4_upd <- dataq4[-c(294477, 458606, 1321962),]
+
+library(lubridate)
+dataq4_upd$ArrTime <- hour(dataq4_upd$Lpep_dropoff_datetime)
+str(dataq4_upd)
+
+
+mr_3 <- lm(Tip_perc ~ .-Passenger_count -Lpep_dropoff_datetime -lpep_pickup_datetime , dataq4_upd)
+mr_4 <- update(mr_3, ~.-Fare_amount 
+               -Dropoff_longitude -Dropoff_latitude -RateCodeID -Trip_type -Pickup_longitude -Pickup_latitude
+               -time.duration)
+summary(mr_4)
+
+
+mr_5 <- update(mr_4, ~.-DepTime -ArrTime)
+summary(mr_5)
+
+
+
+
+par(mfrow = c(2,2))
+plot(mr_5)
+
+
+
+```
+
+
+
+There are high number of outliers and leverage points in the dataset. Removing too many datapoints will cause the model to overfit the dataset. mr_5 will be our final model which has a Residual standard error of 6.7 
+
+**Question 5**
+
+Coordinates of Manhattan are used to create a polygon. 'sp' library is used to call point.in.polygon() which determines whether a point is inside a polygon. Here, we use that function to determine whether a particular dropoff/ pickup point is in a particular borough. 
+
+Our analysis here is limited only to Manhattan Borough. 
+
+```{r Question 5}
+
+###########################################################################################
+#Question 5
+###########################################################################################
+library(sp)
+
+#Manhattan polygon coordinates
+Man_px <- c(-74.03, -74.01, -73.98, -73.97, -73.92, -73.93)
+Man_py <- c(40.71, 40.70, 40.71, 40.73, 40.80, 40.87)
+
+#Brooklyn
+Brok_px <- c(-73.84, -73.96, -74.05, -73.99)
+Brok_py <- c(40.61, 40.74, 40.62, 40.55)
+
+#Staten Island
+Stni_px <- c(-74.08, -74.19, -74.22, -74.05)
+Stni_py <- c(40.64, 40.63, 40.49, 40.60)
+
+#Queens
+Qn_px <-c(-73.75, -73.81, -73.86, -73.94, -73.77)
+Qn_py<- c(40.64, 40.60, 40.70, 40.74, 40.79)
+
+#Bronx
+Brx_px <- c(-73.77, -73.83, -73.91, -73.92, -73.88)
+Brx_py <- c(40.87, 40.80, 40.80, 40.83, 40.90)
+
+
+dataq5 <- dataq4
+
+library(sp)
+dataq5$Borough_drop <- ifelse(point.in.polygon(dataq5$Dropoff_longitude, dataq5$Dropoff_latitude,
+                                          Man_px, Man_py) == 1,"Manhattan", "RestofNYC")
+
+dataq5$Borough_pick <- ifelse(point.in.polygon(dataq5$Pickup_longitude, dataq5$Pickup_latitude,
+                                               Man_px, Man_py) == 1,"Manhattan", "RestofNYC")
+
+table(dataq5$Borough_drop)
+
+```
+
+As we can see, 64.69% drop-offs are in the Manhattan area.
+
+```{r}
+table(dataq5$Borough_drop)
+```
+
+Only 29.19% pick-ups are in the Manhattan area. 
+
+Following is an interactive map of NYC streets. Hovering over a point will give information about the pick-up and drop-off location. At present, We are considering only Manhattan and RestofNYC as our two regions. Coordinates mentioned for other boroughs could be used for further analysis in the future.
+
+```{r Visualization}
+set.seed(2)
+dataq5_s <- dataq5[sample(1461113, 10000), ]
+#Sample of the larger dataset taken for analysis depending on the present computing power.
+
+
+library(leaflet)
+
+pal <- colorFactor(c("blue","#D22E1E"),levels=c("Manhattan", "RestofNYC"))
+
+
+maps <-leaflet(dataq5_s)%>%
+        addProviderTiles("CartoDB.Positron")
+maps %>% setView(-74.00, 40.74, zoom = 10) %>%
+          addCircleMarkers(~Pickup_longitude, ~Pickup_latitude, weight = 1, radius = 1, color=~pal(Borough_drop), 
+                   stroke = TRUE, fillOpacity = 0.1 ,
+                   label = ~paste0(" ",Borough_pick," ","to"," ",Borough_drop))%>%
+            addLegend(pal = pal, values = c("Manhattan", "RestofNYC"), title = "Drop Location")
+```
+
+Clearly, it can be observed that there is a lot more intra-borough traffic in Manhattan. Given more time and computing power, the analysis can be extended to other boroughs of the NYC. 
+
+
+
+
+
+**References:**
+
+1. <http://data.library.virginia.edu/working-with-dates-and-time-in-r-using-the-lubridate-package/>
+
+2. <http://en.wikipedia.org/wiki/Boro_taxi>
+
+3. Book: Introduction to Statistical Learning in R, Gareth James et al
+
+4. Dataset for green cabs for the month of September 2015 is downloaded from <http://www.nyc.gov/html/tlc/html/about/trip_record_data.shtml>
+
+5. To understand what each entry means in the datset, visit:  <http://www.nyc.gov/html/tlc/downloads/pdf/data_dictionary_trip_records_green.pdf>
+
+
+
+## THANK YOU!
