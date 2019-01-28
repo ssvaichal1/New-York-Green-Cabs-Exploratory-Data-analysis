@@ -6,8 +6,7 @@ Question 1
 
 Question 2
 • Plot a histogram of the number of the trip distance (“Trip Distance”).
-1/5/2019 Texas A&M University Mail - Code Challenge Data Science
-https://mail.google.com/mail/u/0?ik=c76351b9b7&view=pt&search=all&permthid=thread-f%3A1621768152026233182&simpl=msg-f%3A16217681520… 2/3
+
 • Report any structure you find and any hypotheses you have about that structure.
 
 Question 3
