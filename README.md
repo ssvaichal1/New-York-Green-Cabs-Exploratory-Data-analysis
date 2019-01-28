@@ -25,14 +25,19 @@ Question 5
 Choose only one of these options to answer for Question 5. There is no preference as to which one you choose. Please
 select the question that you feel your particular skills and/or expertise are best suited to. If you answer more than one, only
 the first will be scored.
+
 • Option A: Distributions
 • Build a derived variable representing the average speed over the course of a trip.
 • Can you perform a test to determine if the average trip speeds are materially the same in all weeks of
 September? If you decide they are not the same, can you form a hypothesis regarding why they differ?
 • Can you build up a hypothesis of average trip speed as a function of time of day?
+
+
 • Option B: Visualization
 • Can you build a visualization (interactive or static) of the trip data that helps us understand intra- vs. interborough
 traffic? What story does it tell about how New Yorkers use their green taxis?
+
+
 • Option C: Search
 • We’re thinking about promoting ride sharing. Build a function that given point a point P, find the k trip origination
 points nearest P.
@@ -41,6 +46,8 @@ points nearest P.
 time ride sharing matching.
 – Please explain not only how this can be computed, but how efficient your approach is (time and space
 complexity)
+
+
 • Option D: Anomaly Detection
 • What anomalies can you find in the data? Did taxi traffic or behavior deviate from the norm on a particular
 day/time or in a particular location?
